@@ -5,16 +5,23 @@ import QrScanner from 'qr-scanner';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Button, Card } from './index';
-import { Camera, CameraOff, Scan, Copy, X } from 'lucide-react';
+import { Camera, CameraOff, Scan, Copy, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { permissionManager, checkBrowserSupport } from '@/utils/validation';
 
 export default function QRScanner() {
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cameraPermission, setCameraPermission] = useState<PermissionState | null>(null);
+  const [isCheckingPermissions, setIsCheckingPermissions] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
 
   useEffect(() => {
+    // Check camera permission on mount
+    checkCameraPermission();
+
     return () => {
       if (scannerRef.current) {
         scannerRef.current.destroy();
@@ -22,21 +29,46 @@ export default function QRScanner() {
     };
   }, []);
 
-  const startScanning = async () => {
+  const checkCameraPermission = async () => {
+    setIsCheckingPermissions(true);
+    try {
+      const permission = await permissionManager.camera();
+      setCameraPermission(permission);
+    } catch (error) {
+      console.error('Permission check failed:', error);
+      setCameraPermission('prompt');
+    } finally {
+      setIsCheckingPermissions(false);
+    }
+  };
+
+  const startScanning = async (isRetry = false) => {
     if (!videoRef.current) {
       setError('Video element not found');
+      return;
+    }
+
+    // Check browser compatibility first
+    if (!checkBrowserSupport.camera()) {
+      setError('Camera not supported in this browser');
+      toast.error('Camera not supported in this browser');
+      return;
+    }
+
+    // Check if we're on HTTPS (required for camera access)
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+      setError('Camera access requires HTTPS. Please use HTTPS or localhost.');
+      toast.error('Camera access requires HTTPS');
       return;
     }
 
     try {
       setError(null);
       setResult(null);
+      setIsScanning(true);
 
-      // Check if we're on HTTPS (required for camera access)
-      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-        setError('Camera access requires HTTPS. Please use HTTPS or localhost.');
-        toast.error('Camera access requires HTTPS');
-        return;
+      if (!isRetry) {
+        setRetryCount(0);
       }
 
       const scanner = new QrScanner(
@@ -45,11 +77,9 @@ export default function QRScanner() {
           console.log('QR Code detected:', result.data);
           setResult(result.data);
           stopScanning();
-
-          // Play success sound
           playScanSound();
-
           toast.success('QR code scanned successfully!');
+          setRetryCount(0);
         },
         {
           onDecodeError: (err) => {
@@ -61,32 +91,47 @@ export default function QRScanner() {
           highlightScanRegion: true,
           highlightCodeOutline: true,
           preferredCamera: 'environment', // Use back camera on mobile
+          maxScansPerSecond: 5, // Limit scan rate for performance
         }
       );
 
       scannerRef.current = scanner;
       await scanner.start();
-      setIsScanning(true);
+
       toast.success('Camera started - point at a QR code');
 
       // Verify camera is actually streaming
       setTimeout(() => {
         if (videoRef.current && videoRef.current.videoWidth === 0) {
           console.warn('Camera stream may not be active');
+          setError('Camera stream not detected. Please try again.');
+          toast.error('Camera stream not detected');
         }
-      }, 1000);
+      }, 2000);
 
     } catch (err: any) {
       console.error('Scanner error:', err);
+      setIsScanning(false);
+
       const errorMessage = err?.name === 'NotAllowedError'
-        ? 'Camera access denied. Please allow camera permissions and try again.'
+        ? 'Camera access denied. Please allow camera permissions in your browser settings and try again.'
         : err?.name === 'NotFoundError'
         ? 'No camera found on this device.'
         : err?.name === 'NotSupportedError'
         ? 'Camera not supported on this device.'
+        : err?.name === 'NotReadableError'
+        ? 'Camera is being used by another application.'
         : err?.message || 'Failed to start camera. Please try again.';
+
       setError(errorMessage);
       toast.error(errorMessage);
+
+      // Auto-retry for certain errors
+      if ((err?.name === 'NotReadableError' || err?.name === 'AbortError') && retryCount < 2) {
+        setRetryCount(prev => prev + 1);
+        toast.loading(`Retrying... (${retryCount + 1}/3)`, { duration: 2000 });
+        setTimeout(() => startScanning(true), 2000);
+      }
     }
   };
 
@@ -184,11 +229,33 @@ export default function QRScanner() {
           )}
         </div>
 
+        {/* Permission Status */}
+        {cameraPermission && (
+          <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className={`w-2 h-2 rounded-full ${
+              cameraPermission === 'granted' ? 'bg-green-500' :
+              cameraPermission === 'denied' ? 'bg-red-500' : 'bg-yellow-500'
+            }`}></div>
+            <span className="text-xs text-gray-600 dark:text-gray-400">
+              Camera: {cameraPermission === 'granted' ? 'Allowed' :
+                       cameraPermission === 'denied' ? 'Blocked' : 'Prompt'}
+            </span>
+          </div>
+        )}
+
         <div className="flex gap-2">
           {!isScanning ? (
-            <Button onClick={startScanning} className="flex-1">
-              <Camera className="w-4 h-4 mr-2" />
-              Start Scanning
+            <Button
+              onClick={() => startScanning(false)}
+              className="flex-1"
+              disabled={isCheckingPermissions}
+            >
+              {isCheckingPermissions ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Camera className="w-4 h-4 mr-2" />
+              )}
+              {isCheckingPermissions ? 'Checking...' : 'Start Scanning'}
             </Button>
           ) : (
             <Button onClick={stopScanning} variant="destructive" className="flex-1">
@@ -204,18 +271,52 @@ export default function QRScanner() {
             animate={{ opacity: 1 }}
             className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
           >
-            <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
-            {error.includes('HTTPS') && (
-              <p className="text-xs text-gray-500 mt-1">
-                💡 Tip: Camera access requires a secure connection (HTTPS)
-              </p>
-            )}
-            {error.includes('denied') && (
-              <p className="text-xs text-gray-500 mt-1">
-                💡 Tip: Check your browser settings to allow camera access
-              </p>
-            )}
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+                {error.includes('HTTPS') && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Tip: Camera access requires a secure connection (HTTPS)
+                  </p>
+                )}
+                {error.includes('denied') && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Tip: Check your browser settings to allow camera access
+                  </p>
+                )}
+                {error.includes('not found') && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Tip: Make sure your device has a camera connected
+                  </p>
+                )}
+                <Button
+                  onClick={() => startScanning(false)}
+                  size="small"
+                  className="mt-2"
+                  disabled={isScanning}
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                  Try Again
+                </Button>
+              </div>
+            </div>
           </motion.div>
+        )}
+
+        {/* Help Text */}
+        {!isScanning && !error && !result && (
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">
+              How to scan QR codes:
+            </h4>
+            <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+              <li>• Click "Start Scanning" to activate camera</li>
+              <li>• Allow camera permissions when prompted</li>
+              <li>• Point camera at QR code within the frame</li>
+              <li>• Hold steady for 1-2 seconds</li>
+            </ul>
+          </div>
         )}
 
         {result && (

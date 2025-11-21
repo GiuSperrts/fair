@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { Button, Card } from './index';
-import { Download, QrCode, X, Share2, Wifi, User, Link, Mail, Phone, FileText, Settings, History, Palette } from 'lucide-react';
+import { Download, QrCode, X, Share2, Wifi, User, Link, Mail, Phone, FileText, Settings, History, Palette, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { validate, sanitize, safeLocalStorage, withRetry, utils } from '@/utils/validation';
 
 interface QRTemplate {
   id: string;
@@ -92,71 +93,150 @@ export default function QRGenerator() {
   const [qrHistory, setQrHistory] = useState<QRHistory[]>([]);
   const [foregroundColor, setForegroundColor] = useState('#000000');
   const [backgroundColor, setBackgroundColor] = useState('#FFFFFF');
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
-    // Load history from localStorage
-    const saved = localStorage.getItem('qrHistory');
-    if (saved) {
-      try {
-        setQrHistory(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to load QR history:', e);
+  // Debounced validation
+  const debouncedValidate = useCallback(
+    utils.debounce((value: string) => {
+      if (!value.trim()) {
+        setValidationError(null);
+        return;
       }
+
+      const validation = validate.text(value, {
+        maxLength: 2000,
+        customValidator: (val) => {
+          // Template-specific validation
+          switch (selectedTemplate.id) {
+            case 'url':
+              return validate.url(val);
+            case 'email':
+              return validate.email(val);
+            case 'phone':
+              return validate.phone(val);
+            case 'wifi':
+              return validate.wifi(val);
+            case 'contact':
+              return validate.contact(val);
+            default:
+              return validate.text(val, { maxLength: 2000 });
+          }
+        }
+      });
+
+      setValidationError(validation.isValid ? null : validation.error || 'Invalid input');
+    }, 300),
+    [selectedTemplate]
+  );
+
+  useEffect(() => {
+    // Load history from localStorage with error handling
+    const savedHistory = safeLocalStorage.get('qrHistory', []);
+    if (Array.isArray(savedHistory)) {
+      setQrHistory(savedHistory);
     }
+
+    // Load user preferences
+    const savedForeground = safeLocalStorage.get('qrForegroundColor', '#000000');
+    const savedBackground = safeLocalStorage.get('qrBackgroundColor', '#FFFFFF');
+    setForegroundColor(savedForeground);
+    setBackgroundColor(savedBackground);
   }, []);
 
-  const saveToHistory = (content: string, qrDataUrl: string) => {
-    const newEntry: QRHistory = {
-      id: Date.now().toString(),
-      content,
-      template: selectedTemplate.name,
-      timestamp: Date.now(),
-      qrDataUrl
-    };
+  // Validate input on change
+  useEffect(() => {
+    debouncedValidate(text);
+  }, [text, debouncedValidate]);
 
-    const updated = [newEntry, ...qrHistory.slice(0, 9)]; // Keep last 10
-    setQrHistory(updated);
-    localStorage.setItem('qrHistory', JSON.stringify(updated));
+  // Save color preferences
+  useEffect(() => {
+    safeLocalStorage.set('qrForegroundColor', foregroundColor);
+    safeLocalStorage.set('qrBackgroundColor', backgroundColor);
+  }, [foregroundColor, backgroundColor]);
+
+  const saveToHistory = (content: string, qrDataUrl: string) => {
+    try {
+      const newEntry: QRHistory = {
+        id: utils.generateId(),
+        content,
+        template: selectedTemplate.name,
+        timestamp: Date.now(),
+        qrDataUrl
+      };
+
+      const updated = [newEntry, ...qrHistory.slice(0, 9)]; // Keep last 10
+      setQrHistory(updated);
+
+      const saved = safeLocalStorage.set('qrHistory', updated);
+      if (!saved) {
+        toast.error('Failed to save to history. Storage may be full.');
+      }
+    } catch (error) {
+      console.error('Error saving to history:', error);
+      toast.error('Failed to save QR code to history');
+    }
   };
 
   const generateQR = async () => {
     const trimmedText = text.trim();
+
+    // Validate input
     if (!trimmedText) {
       toast.error('Please enter some content to generate a QR code');
       return;
     }
 
-    if (trimmedText.length > 2000) {
-      toast.error('Content is too long. Please keep it under 2000 characters');
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
     setIsGenerating(true);
+    setRetryCount(0);
+
     try {
-      // Format content based on selected template
+      // Format and validate content based on selected template
       const formattedContent = selectedTemplate.format(trimmedText);
 
-      const url = await QRCode.toDataURL(formattedContent, {
-        width: 256,
-        margin: 2,
-        color: {
-          dark: foregroundColor,
-          light: backgroundColor,
-        },
-        errorCorrectionLevel: 'M',
-      });
+      // Generate QR code with retry mechanism
+      const generateOperation = async () => {
+        return await QRCode.toDataURL(formattedContent, {
+          width: 256,
+          margin: 2,
+          color: {
+            dark: foregroundColor,
+            light: backgroundColor,
+          },
+          errorCorrectionLevel: 'M',
+        });
+      };
+
+      const url = await withRetry(generateOperation, 3, 500);
 
       setQrCodeUrl(url);
       saveToHistory(formattedContent, url);
 
-      // Play success sound if available
+      // Play success sound
       playSuccessSound();
 
       toast.success('QR code generated successfully!');
+      setRetryCount(0);
+
     } catch (error) {
       console.error('Error generating QR code:', error);
-      toast.error('Failed to generate QR code. Please try again.');
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+      if (retryCount < 2) {
+        setRetryCount(prev => prev + 1);
+        toast.error(`Generation failed. Retrying... (${retryCount + 1}/3)`);
+        setTimeout(() => generateQR(), 1000);
+        return;
+      }
+
+      toast.error(`Failed to generate QR code: ${errorMessage}`);
     } finally {
       setIsGenerating(false);
     }
@@ -417,8 +497,13 @@ export default function QRGenerator() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={selectedTemplate.placeholder}
-            className="w-full p-3 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-apple-dark-gray text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-apple-blue focus:border-transparent resize-none"
+            className={`w-full p-3 pr-10 border rounded-lg bg-white dark:bg-apple-dark-gray text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-apple-blue focus:border-transparent resize-none transition-colors ${
+              validationError
+                ? 'border-red-300 dark:border-red-600 focus:ring-red-500'
+                : 'border-gray-300 dark:border-gray-600'
+            }`}
             rows={3}
+            maxLength={2000}
           />
           {text && (
             <button
@@ -431,24 +516,84 @@ export default function QRGenerator() {
           )}
         </div>
 
+        {/* Validation Feedback */}
+        <AnimatePresence>
+          {validationError && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+            >
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <span className="text-sm text-red-700 dark:text-red-300">{validationError}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Character Count */}
+        <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+          <span>
+            {selectedTemplate.name} format
+            {selectedTemplate.id !== 'text' && (
+              <span className="ml-2 text-blue-600 dark:text-blue-400">
+                • Follow the placeholder format
+              </span>
+            )}
+          </span>
+          <span className={`${text.length > 1800 ? 'text-orange-500' : ''} ${text.length > 1950 ? 'text-red-500' : ''}`}>
+            {text.length}/2000
+          </span>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex gap-2">
-          <Button onClick={generateQR} disabled={!text.trim() || isGenerating} className="flex-1">
+          <Button
+            onClick={generateQR}
+            disabled={!text.trim() || isGenerating || !!validationError}
+            className="flex-1 relative"
+          >
             {isGenerating ? (
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
-              />
+              <>
+                <Loader className="w-4 h-4 mr-2 animate-spin" />
+                <span className="mr-2">Generating...</span>
+                {retryCount > 0 && (
+                  <span className="text-xs opacity-75">({retryCount}/3)</span>
+                )}
+              </>
             ) : (
-              <QrCode className="w-4 h-4 mr-2" />
+              <>
+                <QrCode className="w-4 h-4 mr-2" />
+                Generate
+              </>
             )}
-            {isGenerating ? 'Generating...' : 'Generate'}
           </Button>
           <Button onClick={clearAll} variant="secondary" size="small">
             <X className="w-4 h-4" />
           </Button>
         </div>
+
+        {/* Template Help */}
+        <AnimatePresence>
+          {selectedTemplate.id !== 'text' && text && !validationError && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg"
+            >
+              <div className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-700 dark:text-blue-300">
+                  <div className="font-medium mb-1">Format Preview:</div>
+                  <div className="font-mono text-xs bg-blue-100 dark:bg-blue-800/50 p-2 rounded">
+                    {selectedTemplate.format(text)}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {qrCodeUrl && (
           <motion.div
