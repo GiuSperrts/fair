@@ -45,6 +45,10 @@ export default function QRScanner() {
           console.log('QR Code detected:', result.data);
           setResult(result.data);
           stopScanning();
+
+          // Play success sound
+          playScanSound();
+
           toast.success('QR code scanned successfully!');
         },
         {
@@ -111,6 +115,31 @@ export default function QRScanner() {
     setResult(null);
     setError(null);
     toast.success('Cleared!');
+  };
+
+  const playScanSound = () => {
+    try {
+      // Create a pleasant scan success sound
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // Play a pleasant ascending tone
+      oscillator.frequency.setValueAtTime(523, audioContext.currentTime); // C5
+      oscillator.frequency.setValueAtTime(659, audioContext.currentTime + 0.1); // E5
+      oscillator.frequency.setValueAtTime(784, audioContext.currentTime + 0.2); // G5
+
+      gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (e) {
+      // Silently fail if audio context is not available
+    }
   };
 
   return (
