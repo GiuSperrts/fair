@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Diagnostics</title>
+    <style>
+        /* RESET */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* BODY */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif;
+            background: linear-gradient(145deg, #dae2f8 0%, #d6a4a4 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        /* MAIN CONTAINER */
+        .diagnostic-module {
+            width: 100%;
+            max-width: 620px;
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(28px) saturate(180%);
+            -webkit-backdrop-filter: blur(28px) saturate(180%);
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.36);
+            box-shadow:
+                0 20px 40px rgba(0, 0, 0, 0.12),
+                0 4px 8px rgba(0, 0, 0, 0.08),
+                inset 0 0 0 0 rgba(255, 255, 255, 0.4);
+            overflow: hidden;
+            animation: moduleFade 0.4s ease;
+        }
+
+        @keyframes moduleFade {
+            from {
+                opacity: 0;
+                transform: scale(0.94);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* HEADER */
+        .header {
+            text-align: center;
+            padding: 2.5rem 2rem;
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .header h1 {
+            font-size: 1.7rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: #111;
+        }
+
+        .header p {
+            color: #6d6d72;
+            font-size: 0.95rem;
+            margin-top: 0.3rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .last-check {
+            font-size: 0.78rem;
+            color: #7a7a7e;
+            font-style: italic;
+        }
+
+        /* MANUAL RUN BUTTON */
+        .manual-trigger-btn {
+            padding: 0.6rem 1.4rem;
+            background: linear-gradient(130deg, #007aff 0%, #0f8bff 100%);
+            color: #fff;
+            border: none !important;
+            border-radius: 18px;
+            font-size: 0.92rem;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(0, 122, 255, 0.3);
+            transition: all 0.25s ease;
+        }
+
+        .manual-trigger-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 22px rgba(0, 122, 255, 0.4);
+        }
+
+        /* LOADING SECTION */
+        .loading-container {
+            text-align: center;
+            padding: 3.2rem 2rem;
+        }
+
+        /* IMPROVED APPLE-STYLE LOADER */
+        .loading-spinner {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background:
+                conic-gradient(from 0deg,
+                    rgba(0, 122, 255, 1),
+                    rgba(0, 122, 255, 0) 70%);
+            mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 0);
+            animation: spinnerRotate 1.1s linear infinite;
+            margin: 0 auto 1.5rem;
+        }
+
+        @keyframes spinnerRotate {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-text {
+            color: #7c7c80;
+            font-size: 0.9rem;
+            letter-spacing: 0.1px;
+        }
+
+        /* CHECKS */
+        .checks-container {
+            padding: 1.2rem 1rem 2rem;
+        }
+
+        .check-item {
+            display: flex;
+            align-items: center;
+            padding: 1.2rem;
+            margin: 0.55rem 0;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow:
+                0 4px 16px rgba(0, 0, 0, 0.06),
+                inset 0 0 0 0 rgba(255, 255, 255, 0.5);
+            opacity: 0;
+            transform: translateY(16px) scale(0.97);
+            transition: all 0.45s cubic-bezier(.25, .8, .25, 1);
+        }
+
+        .check-item.animate-in {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        /* STATUS ICONS */
+        .status-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            margin-right: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            color: #fff;
+            font-weight: 700;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Gradients improved */
+        .status-pending {
+            background: linear-gradient(135deg, #f5a623, #ffcc00);
+            animation: softPulse 2s infinite;
+        }
+
+        @keyframes softPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(0.92);
+                opacity: 0.85;
+            }
+        }
+
+        .status-passed {
+            background: linear-gradient(135deg, #30d158, #34c759);
+        }
+
+        .status-failed {
+            background: linear-gradient(135deg, #ff453a, #ff3b30);
+        }
+
+        .status-skipped {
+            background: linear-gradient(135deg, #8e8e93, #aeaeb2);
+        }
+
+        /* TEXT IN CHECK */
+        .check-name {
+            font-weight: 600;
+            color: #1c1c1e;
+            font-size: 1rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .check-message {
+            font-size: 0.86rem;
+            color: #6c6c70;
+        }
+
+        .check-details {
+            font-size: 0.75rem;
+            color: #ff3b30;
+            margin-top: 0.3rem;
+        }
+
+        /* SUMMARY BOX */
+        .summary {
+            margin: 1.4rem;
+            padding: 1.8rem 1.4rem;
+            background: rgba(255, 255, 255, 0.55);
+            backdrop-filter: blur(20px) saturate(180%);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            text-align: center;
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.08);
+            animation: summaryPop 0.35s ease;
+        }
+
+        @keyframes summaryPop {
+            from {
+                transform: translateY(18px) scale(0.96);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .summary h2 {
+            font-size: 1.45rem;
+            font-weight: 700;
+            color: #111;
+            margin-bottom: 1.2rem;
+        }
+
+        /* SUMMARY STATS */
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            gap: 1rem;
+        }
+
+        .stat-number {
+            font-size: 2.6rem;
+            font-weight: 800;
+        }
+
+        .stat-passed .stat-number {
+            color: #30d158;
+        }
+
+        .stat-failed .stat-number {
+            color: #ff3b30;
+        }
+
+        .stat-skipped .stat-number {
+            color: #8e8e93;
+        }
+
+        .stat-label {
+            font-size: 0.78rem;
+            margin-top: 0.2rem;
+            text-transform: uppercase;
+            color: #6d6d72;
+            letter-spacing: 0.4px;
+        }
+
+        /* RETRY BUTTON */
+        .retry-button {
+            margin-top: 1.6rem;
+            padding: 0.75rem 1.8rem;
+            background: linear-gradient(135deg, #007aff, #0a84ff);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(0, 122, 255, 0.3);
+            transition: all 0.25s ease;
+        }
+
+        .retry-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 22px rgba(0, 122, 255, 0.4);
+        }
+
+        /* MOBILE */
+        @media (max-width: 480px) {
+            .diagnostic-module {
+                margin: 14px;
+                border-radius: 24px;
+            }
+
+            .header {
+                padding: 2rem 1.4rem;
+            }
+
+            .summary-stats {
+                flex-direction: column;
+                gap: 0.6rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="diagnostic-module" id="diagnosticModule">
+        <div class="header">
+            <h1>System Diagnostics</h1>
+            <p>Checking your browser capabilities...</p>
+            <div class="last-check" id="lastCheckInfo"></div>
+            <div class="manual-trigger">
+                <button class="manual-trigger-btn" id="manualTriggerBtn" onclick="runDiagnostics()">
+                    Run System Check
+                </button>
+            </div>
+        </div>
+
+        <div class="loading-container" id="loadingContainer">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Running diagnostics...</p>
+        </div>
+
+        <div class="checks-container" id="checksContainer" style="display: none;">
+            <!-- Check items will be inserted here -->
+        </div>
+
+        <div class="summary" id="summary" style="display: none;">
+            <h2>Diagnostics Complete</h2>
+            <div class="summary-stats">
+                <div class="stat stat-passed">
+                    <span class="stat-number" id="passedCount">0</span>
+                    <div class="stat-label">Passed</div>
+                </div>
+                <div class="stat stat-failed">
+                    <span class="stat-number" id="failedCount">0</span>
+                    <div class="stat-label">Failed</div>
+                </div>
+                <div class="stat stat-skipped">
+                    <span class="stat-number" id="skippedCount">0</span>
+                    <div class="stat-label">Skipped</div>
+                </div>
+            </div>
+            <button class="retry-button" id="retryButton" onclick="runDiagnostics()">Run Again</button>
+        </div>
+    </div>
+
+    <script>
+        class DiagnosticModule {
+            constructor(containerId, options = {}) {
+                this.container = document.getElementById(containerId);
+                this.options = {
+                    autoRunDaily: options.autoRunDaily !== false, // Default to true
+                    dailyInterval: options.dailyInterval || 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+                    showPrompt: options.showPrompt !== false, // Default to true
+                    ...options
+                };
+                this.checks = [
+                    { name: 'WebRTC Support', check: this.checkWebRTC.bind(this) },
+                    { name: 'WebGL Support', check: this.checkWebGL.bind(this) },
+                    { name: 'Service Workers', check: this.checkServiceWorkers.bind(this) },
+                    { name: 'IndexedDB Support', check: this.checkIndexedDB.bind(this) },
+                    { name: 'Audio Context', check: this.checkAudioContext.bind(this) },
+                    { name: 'Camera Permissions', check: this.checkCameraPermissions.bind(this) },
+                    { name: 'Microphone Permissions', check: this.checkMicrophonePermissions.bind(this) },
+                    { name: 'Notification Permissions', check: this.checkNotificationPermissions.bind(this) },
+                    { name: 'Bot Detection', check: this.checkBotDetection.bind(this) },
+                ];
+                this.results = [];
+                this.init();
+            }
+
+            init() {
+                // Hide container initially
+                this.container.style.display = 'none';
+
+                if (this.options.autoRunDaily && this.shouldRunDailyDiagnostics()) {
+                    this.showDailyPrompt();
+                } else {
+                    this.showManualTrigger();
+                }
+            }
+
+            shouldRunDailyDiagnostics() {
+                const lastRun = localStorage.getItem('diagnosticLastRun');
+                if (!lastRun) return true;
+
+                const lastRunTime = parseInt(lastRun);
+                const now = Date.now();
+                return (now - lastRunTime) >= this.options.dailyInterval;
+            }
+
+            showDailyPrompt() {
+                if (!this.options.showPrompt) {
+                    this.runDiagnostics();
+                    return;
+                }
+
+                // Create overlay for daily prompt
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.5);
+                    backdrop-filter: blur(8px);
+                    -webkit-backdrop-filter: blur(8px);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10000;
+                    animation: fadeIn 0.3s ease;
+                `;
+
+                const prompt = document.createElement('div');
+                prompt.style.cssText = `
+                    background: rgba(255, 255, 255, 0.95);
+                    -webkit-backdrop-filter: blur(20px);
+                    backdrop-filter: blur(20px);
+                    border-radius: 20px;
+                    padding: 2rem;
+                    max-width: 400px;
+                    text-align: center;
+                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+                    animation: slideUp 0.3s ease;
+                `;
+
+                prompt.innerHTML = `
+                    <h3 style="font-size: 1.25rem; font-weight: 600; color: #1D1D1F; margin-bottom: 0.5rem;">
+                        Daily System Check
+                    </h3>
+                    <p style="color: #86868B; margin-bottom: 1.5rem; line-height: 1.5;">
+                        It's been 24 hours since your last diagnostic check. Would you like to run a quick system health check?
+                    </p>
+                    <div style="display: flex; gap: 0.75rem; justify-content: center;">
+                        <button id="runDailyBtn" style="
+                            padding: 0.75rem 1.5rem;
+                            background: linear-gradient(135deg, #007AFF, #0A84FF);
+                            color: white;
+                            border: none;
+                            border-radius: 25px;
+                            font-size: 0.875rem;
+                            font-weight: 500;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+                        ">Run Check</button>
+                        <button id="skipDailyBtn" style="
+                            padding: 0.75rem 1.5rem;
+                            background: rgba(142, 142, 147, 0.1);
+                            color: #86868B;
+                            border: 1px solid rgba(142, 142, 147, 0.2);
+                            border-radius: 25px;
+                            font-size: 0.875rem;
+                            font-weight: 500;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                        ">Skip for Now</button>
+                    </div>
+                `;
+
+                overlay.appendChild(prompt);
+                document.body.appendChild(overlay);
+
+                // Add event listeners
+                document.getElementById('runDailyBtn').addEventListener('click', () => {
+                    document.body.removeChild(overlay);
+                    this.runDiagnostics();
+                });
+
+                document.getElementById('skipDailyBtn').addEventListener('click', () => {
+                    document.body.removeChild(overlay);
+                    this.showManualTrigger();
+                });
+
+                // Add CSS animations
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes fadeIn {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+                    @keyframes slideUp {
+                        from { opacity: 0; transform: translateY(20px) scale(0.95); }
+                        to { opacity: 1; transform: translateY(0) scale(1); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            showManualTrigger() {
+                // Show the normal interface
+                this.container.style.display = 'block';
+
+                // Update header for manual mode
+                const headerP = this.container.querySelector('.header p');
+                headerP.textContent = 'Monitor your browser\'s system capabilities';
+
+                // Show last check info
+                this.updateLastCheckInfo();
+
+                // Show manual trigger button
+                const manualBtn = document.getElementById('manualTriggerBtn');
+                if (manualBtn) {
+                    manualBtn.style.display = 'inline-block';
+                }
+            }
+
+            updateLastCheckInfo() {
+                const lastRun = localStorage.getItem('diagnosticLastRun');
+                const lastCheckInfo = document.getElementById('lastCheckInfo');
+
+                if (lastRun && lastCheckInfo) {
+                    const lastRunTime = parseInt(lastRun);
+                    const now = Date.now();
+                    const hoursSince = Math.floor((now - lastRunTime) / (1000 * 60 * 60));
+
+                    if (hoursSince < 24) {
+                        lastCheckInfo.textContent = `Last checked ${hoursSince} hour${hoursSince !== 1 ? 's' : ''} ago`;
+                    } else {
+                        const daysSince = Math.floor(hoursSince / 24);
+                        lastCheckInfo.textContent = `Last checked ${daysSince} day${daysSince !== 1 ? 's' : ''} ago`;
+                    }
+                } else if (lastCheckInfo) {
+                    lastCheckInfo.textContent = 'No previous checks found';
+                }
+            }
+
+            updateLastRunTime() {
+                localStorage.setItem('diagnosticLastRun', Date.now().toString());
+            }
+
+            async runDiagnostics() {
+                this.showLoading();
+                this.results = this.checks.map(check => ({ name: check.name, status: 'pending', message: 'Checking...' }));
+
+                const checksContainer = document.getElementById('checksContainer');
+                checksContainer.innerHTML = '';
+                checksContainer.style.display = 'block';
+
+                for (let i = 0; i < this.checks.length; i++) {
+                    const check = this.checks[i];
+                    try {
+                        const result = await check.check();
+                        this.results[i] = result;
+                        this.addCheckItem(result, i);
+                        await this.delay(300); // Visual delay
+                    } catch (error) {
+                        this.results[i] = {
+                            name: check.name,
+                            status: 'failed',
+                            message: 'Check failed',
+                            details: error.message || 'Unknown error'
+                        };
+                        this.addCheckItem(this.results[i], i);
+                    }
+                }
+
+                this.hideLoading();
+                this.showSummary();
+            }
+
+            showLoading() {
+                document.getElementById('loadingContainer').style.display = 'block';
+                document.getElementById('checksContainer').style.display = 'none';
+                document.getElementById('summary').style.display = 'none';
+            }
+
+            hideLoading() {
+                document.getElementById('loadingContainer').style.display = 'none';
+            }
+
+            addCheckItem(result, index) {
+                const checksContainer = document.getElementById('checksContainer');
+                const item = document.createElement('div');
+                item.className = 'check-item';
+                item.innerHTML = `
+                    <div class="status-icon status-${result.status}">${this.getStatusIcon(result.status)}</div>
+                    <div class="check-content">
+                        <div class="check-name">${result.name}</div>
+                        <div class="check-message">${result.message}</div>
+                        ${result.details ? `<div class="check-details">${result.details}</div>` : ''}
+                    </div>
+                `;
+
+                checksContainer.appendChild(item);
+
+                // Animate in
+                setTimeout(() => {
+                    item.classList.add('animate-in');
+                }, 50);
+            }
+
+            getStatusIcon(status) {
+                switch (status) {
+                    case 'passed': return '✓';
+                    case 'failed': return '✕';
+                    case 'skipped': return '○';
+                    default: return '⋯';
+                }
+            }
+
+            showSummary() {
+                const passed = this.results.filter(r => r.status === 'passed').length;
+                const failed = this.results.filter(r => r.status === 'failed').length;
+                const skipped = this.results.filter(r => r.status === 'skipped').length;
+
+                document.getElementById('passedCount').textContent = passed;
+                document.getElementById('failedCount').textContent = failed;
+                document.getElementById('skippedCount').textContent = skipped;
+
+                document.getElementById('summary').style.display = 'block';
+
+                // Update last run time
+                this.updateLastRunTime();
+            }
+
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            // Diagnostic check functions
+            async checkWebRTC() {
+                try {
+                    const pc = new RTCPeerConnection();
+                    pc.close();
+                    return { name: 'WebRTC Support', status: 'passed', message: 'WebRTC is supported' };
+                } catch {
+                    return { name: 'WebRTC Support', status: 'failed', message: 'WebRTC not supported' };
+                }
+            }
+
+            async checkWebGL() {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                    if (gl) {
+                        return { name: 'WebGL Support', status: 'passed', message: 'WebGL is supported' };
+                    }
+                    return { name: 'WebGL Support', status: 'failed', message: 'WebGL not supported' };
+                } catch {
+                    return { name: 'WebGL Support', status: 'failed', message: 'WebGL check failed' };
+                }
+            }
+
+            async checkServiceWorkers() {
+                if ('serviceWorker' in navigator) {
+                    return { name: 'Service Workers', status: 'passed', message: 'Service Workers supported' };
+                }
+                return { name: 'Service Workers', status: 'failed', message: 'Service Workers not supported' };
+            }
+
+            async checkIndexedDB() {
+                if ('indexedDB' in window) {
+                    return { name: 'IndexedDB Support', status: 'passed', message: 'IndexedDB is supported' };
+                }
+                return { name: 'IndexedDB Support', status: 'failed', message: 'IndexedDB not supported' };
+            }
+
+            async checkAudioContext() {
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        const audioContext = new AudioContext();
+                        audioContext.close();
+                        return { name: 'Audio Context', status: 'passed', message: 'Audio Context supported' };
+                    }
+                    return { name: 'Audio Context', status: 'failed', message: 'Audio Context not supported' };
+                } catch {
+                    return { name: 'Audio Context', status: 'failed', message: 'Audio Context check failed' };
+                }
+            }
+
+            async checkCameraPermissions() {
+                try {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        return { name: 'Camera Permissions', status: 'failed', message: 'Camera API not supported' };
+                    }
+
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    stream.getTracks().forEach(track => track.stop());
+
+                    return { name: 'Camera Permissions', status: 'passed', message: 'Camera access granted' };
+                } catch (error) {
+                    if (error.name === 'NotAllowedError') {
+                        return {
+                            name: 'Camera Permissions',
+                            status: 'failed',
+                            message: 'Camera access denied',
+                            details: 'Please allow camera access in your browser settings'
+                        };
+                    }
+                    if (error.name === 'NotFoundError') {
+                        return { name: 'Camera Permissions', status: 'skipped', message: 'No camera detected' };
+                    }
+                    return {
+                        name: 'Camera Permissions',
+                        status: 'failed',
+                        message: 'Camera check failed',
+                        details: error.message
+                    };
+                }
+            }
+
+            async checkMicrophonePermissions() {
+                try {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        return { name: 'Microphone Permissions', status: 'failed', message: 'Audio API not supported' };
+                    }
+
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(track => track.stop());
+
+                    return { name: 'Microphone Permissions', status: 'passed', message: 'Microphone access granted' };
+                } catch (error) {
+                    if (error.name === 'NotAllowedError') {
+                        return {
+                            name: 'Microphone Permissions',
+                            status: 'failed',
+                            message: 'Microphone access denied',
+                            details: 'Please allow microphone access in your browser settings'
+                        };
+                    }
+                    if (error.name === 'NotFoundError') {
+                        return { name: 'Microphone Permissions', status: 'skipped', message: 'No microphone detected' };
+                    }
+                    return {
+                        name: 'Microphone Permissions',
+                        status: 'failed',
+                        message: 'Microphone check failed',
+                        details: error.message
+                    };
+                }
+            }
+
+            async checkNotificationPermissions() {
+                try {
+                    if (!('Notification' in window)) {
+                        return { name: 'Notification Permissions', status: 'failed', message: 'Notifications not supported' };
+                    }
+
+                    if (Notification.permission === 'granted') {
+                        return { name: 'Notification Permissions', status: 'passed', message: 'Notifications enabled' };
+                    }
+
+                    if (Notification.permission === 'denied') {
+                        return {
+                            name: 'Notification Permissions',
+                            status: 'failed',
+                            message: 'Notifications blocked',
+                            details: 'Please enable notifications in your browser settings'
+                        };
+                    }
+
+                    // Request permission
+                    const permission = await Notification.requestPermission();
+                    if (permission === 'granted') {
+                        return { name: 'Notification Permissions', status: 'passed', message: 'Notifications enabled' };
+                    } else {
+                        return {
+                            name: 'Notification Permissions',
+                            status: 'failed',
+                            message: 'Notifications denied',
+                            details: 'Notifications are required for some features'
+                        };
+                    }
+                } catch (error) {
+                    return {
+                        name: 'Notification Permissions',
+                        status: 'failed',
+                        message: 'Notification check failed',
+                        details: error.message
+                    };
+                }
+            }
+
+            async checkBotDetection() {
+                const heuristics = [];
+
+                // Timing check - bots often execute too quickly
+                const startTime = performance.now();
+                await this.delay(10);
+                const endTime = performance.now();
+                const timingVariance = endTime - startTime;
+                heuristics.push(timingVariance > 15); // Should be around 10-15ms for humans
+
+                // Mouse entropy - check if mouse has moved
+                let mouseMoved = false;
+                const mouseHandler = () => { mouseMoved = true; };
+                document.addEventListener('mousemove', mouseHandler, { once: true });
+                await this.delay(100);
+                document.removeEventListener('mousemove', mouseHandler);
+                heuristics.push(mouseMoved);
+
+                // WebGL fingerprint presence
+                try {
+                    const canvas = document.createElement('canvas');
+                    const gl = canvas.getContext('webgl');
+                    heuristics.push(!!gl);
+                } catch {
+                    heuristics.push(false);
+                }
+
+                // Concurrency check - bots often have limited concurrency
+                const concurrency = navigator.hardwareConcurrency || 1;
+                heuristics.push(concurrency >= 2);
+
+                // User agent check - basic bot detection
+                const userAgent = navigator.userAgent.toLowerCase();
+                const isBot = /bot|crawl|spider|scraper/i.test(userAgent);
+                heuristics.push(!isBot);
+
+                const humanScore = heuristics.filter(Boolean).length / heuristics.length;
+
+                if (humanScore >= 0.7) {
+                    return { name: 'Bot Detection', status: 'passed', message: 'Human interaction detected' };
+                } else if (humanScore >= 0.4) {
+                    return { name: 'Bot Detection', status: 'skipped', message: 'Uncertain detection result' };
+                } else {
+                    return { name: 'Bot Detection', status: 'failed', message: 'Automated interaction suspected' };
+                }
+            }
+        }
+
+        // Initialize the diagnostic module
+        let diagnosticModule;
+
+        function runDiagnostics() {
+            if (diagnosticModule) {
+                diagnosticModule.runDiagnostics();
+            }
+        }
+
+        // Configuration options
+        const diagnosticConfig = {
+            autoRunDaily: true,        // Enable daily automatic checks
+            dailyInterval: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+            showPrompt: true          // Show confirmation prompt for daily checks
+        };
+
+        document.addEventListener('DOMContentLoaded', function () {
+            diagnosticModule = new DiagnosticModule('diagnosticModule', diagnosticConfig);
+        });
+
+        // Make functions globally available for the retry button
+        window.runDiagnostics = runDiagnostics;
+    </script>
+</body>
+
+</html>

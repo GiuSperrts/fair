@@ -3,6 +3,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --apple-blue: #007AFF;
+  --apple-gray: #8E8E93;
+  --apple-light-gray: #F2F2F7;
+  --apple-dark-gray: #1C1C1E;
+  --apple-red: #FF3B30;
+  --apple-green: #34C759;
 }
 
 @theme inline {
@@ -16,6 +22,12 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --apple-blue: #0A84FF;
+    --apple-gray: #8E8E93;
+    --apple-light-gray: #2C2C2E;
+    --apple-dark-gray: #1C1C1E;
+    --apple-red: #FF453A;
+    --apple-green: #30D158;
   }
 }
 
