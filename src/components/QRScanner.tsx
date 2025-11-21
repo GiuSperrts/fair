@@ -23,25 +23,40 @@ export default function QRScanner() {
   }, []);
 
   const startScanning = async () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current) {
+      setError('Video element not found');
+      return;
+    }
 
     try {
       setError(null);
       setResult(null);
 
+      // Check if we're on HTTPS (required for camera access)
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+        setError('Camera access requires HTTPS. Please use HTTPS or localhost.');
+        toast.error('Camera access requires HTTPS');
+        return;
+      }
+
       const scanner = new QrScanner(
         videoRef.current,
         (result) => {
+          console.log('QR Code detected:', result.data);
           setResult(result.data);
           stopScanning();
           toast.success('QR code scanned successfully!');
         },
         {
           onDecodeError: (err) => {
-            // Ignore decode errors, they're normal
+            // Only log occasional decode errors, not all of them
+            if (Math.random() < 0.01) {
+              console.log('QR decode error (normal):', err);
+            }
           },
           highlightScanRegion: true,
           highlightCodeOutline: true,
+          preferredCamera: 'environment', // Use back camera on mobile
         }
       );
 
@@ -49,15 +64,25 @@ export default function QRScanner() {
       await scanner.start();
       setIsScanning(true);
       toast.success('Camera started - point at a QR code');
+
+      // Verify camera is actually streaming
+      setTimeout(() => {
+        if (videoRef.current && videoRef.current.videoWidth === 0) {
+          console.warn('Camera stream may not be active');
+        }
+      }, 1000);
+
     } catch (err: any) {
+      console.error('Scanner error:', err);
       const errorMessage = err?.name === 'NotAllowedError'
         ? 'Camera access denied. Please allow camera permissions and try again.'
         : err?.name === 'NotFoundError'
         ? 'No camera found on this device.'
-        : 'Failed to start camera. Please try again.';
+        : err?.name === 'NotSupportedError'
+        ? 'Camera not supported on this device.'
+        : err?.message || 'Failed to start camera. Please try again.';
       setError(errorMessage);
       toast.error(errorMessage);
-      console.error('Error starting scanner:', err);
     }
   };
 
@@ -102,10 +127,30 @@ export default function QRScanner() {
             className="w-full h-full object-cover"
             playsInline
             muted
+            autoPlay
+            style={{ transform: 'scaleX(-1)' }} // Mirror the video for better UX
           />
           {!isScanning && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50">
               <CameraOff className="w-12 h-12 text-gray-400" />
+            </div>
+          )}
+          {isScanning && (
+            <div className="absolute inset-0 pointer-events-none">
+              {/* Scanning overlay */}
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                <div className="w-48 h-48 border-2 border-white border-opacity-50 rounded-lg relative">
+                  <div className="absolute -top-1 -left-1 w-6 h-6 border-l-4 border-t-4 border-white rounded-tl"></div>
+                  <div className="absolute -top-1 -right-1 w-6 h-6 border-r-4 border-t-4 border-white rounded-tr"></div>
+                  <div className="absolute -bottom-1 -left-1 w-6 h-6 border-l-4 border-b-4 border-white rounded-bl"></div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 border-r-4 border-b-4 border-white rounded-br"></div>
+                  {/* Animated scanning line */}
+                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-red-500 animate-pulse"></div>
+                </div>
+              </div>
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-sm bg-black bg-opacity-50 px-3 py-1 rounded-full">
+                Point camera at QR code
+              </div>
             </div>
           )}
         </div>
@@ -131,6 +176,16 @@ export default function QRScanner() {
             className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
           >
             <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+            {error.includes('HTTPS') && (
+              <p className="text-xs text-gray-500 mt-1">
+                💡 Tip: Camera access requires a secure connection (HTTPS)
+              </p>
+            )}
+            {error.includes('denied') && (
+              <p className="text-xs text-gray-500 mt-1">
+                💡 Tip: Check your browser settings to allow camera access
+              </p>
+            )}
           </motion.div>
         )}
 
