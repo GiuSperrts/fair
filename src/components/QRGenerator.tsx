@@ -547,29 +547,37 @@ export default function QRGenerator() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <Button
             onClick={generateQR}
             disabled={!text.trim() || isGenerating || !!validationError}
-            className="flex-1 relative"
+            className="flex-1 relative shadow-lg hover:shadow-xl transition-all duration-300"
+            size="large"
           >
             {isGenerating ? (
               <>
-                <Loader className="w-4 h-4 mr-2 animate-spin" />
-                <span className="mr-2">Generating...</span>
+                <Loader className="w-5 h-5 mr-3 animate-spin" />
+                <span className="font-semibold mr-2">Generating...</span>
                 {retryCount > 0 && (
-                  <span className="text-xs opacity-75">({retryCount}/3)</span>
+                  <span className="text-xs opacity-75 bg-white/20 px-2 py-1 rounded-full">
+                    {retryCount}/3
+                  </span>
                 )}
               </>
             ) : (
               <>
-                <QrCode className="w-4 h-4 mr-2" />
-                Generate
+                <QrCode className="w-5 h-5 mr-3" />
+                <span className="font-semibold">Generate QR Code</span>
               </>
             )}
           </Button>
-          <Button onClick={clearAll} variant="secondary" size="small">
-            <X className="w-4 h-4" />
+          <Button
+            onClick={clearAll}
+            variant="secondary"
+            size="large"
+            className="shadow-lg hover:shadow-xl transition-all duration-300 px-6"
+          >
+            <X className="w-5 h-5" />
           </Button>
         </div>
 

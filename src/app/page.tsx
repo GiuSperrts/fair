@@ -356,23 +356,31 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="flex gap-2 mb-6"
+            className="flex gap-3 mb-8 p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl shadow-inner"
           >
             <Button
               onClick={() => setActiveTab('generate')}
               variant={activeTab === 'generate' ? 'primary' : 'secondary'}
-              className="flex-1"
+              className={`flex-1 transition-all duration-300 ${
+                activeTab === 'generate'
+                  ? 'shadow-2xl scale-105 ring-4 ring-blue-500/20'
+                  : 'hover:scale-102'
+              }`}
             >
-              <QrCode className="w-4 h-4 mr-2" />
-              Generate
+              <QrCode className="w-5 h-5 mr-3" />
+              <span className="font-semibold">Generate QR</span>
             </Button>
             <Button
               onClick={() => setActiveTab('scan')}
               variant={activeTab === 'scan' ? 'primary' : 'secondary'}
-              className="flex-1"
+              className={`flex-1 transition-all duration-300 ${
+                activeTab === 'scan'
+                  ? 'shadow-2xl scale-105 ring-4 ring-blue-500/20'
+                  : 'hover:scale-102'
+              }`}
             >
-              <Scan className="w-4 h-4 mr-2" />
-              Scan
+              <Scan className="w-5 h-5 mr-3" />
+              <span className="font-semibold">Scan QR</span>
             </Button>
           </motion.div>
 

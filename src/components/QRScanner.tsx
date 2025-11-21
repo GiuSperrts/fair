@@ -243,24 +243,32 @@ export default function QRScanner() {
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           {!isScanning ? (
             <Button
               onClick={() => startScanning(false)}
-              className="flex-1"
+              className="flex-1 shadow-lg hover:shadow-xl transition-all duration-300"
               disabled={isCheckingPermissions}
+              size="large"
             >
               {isCheckingPermissions ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
               ) : (
-                <Camera className="w-4 h-4 mr-2" />
+                <Camera className="w-5 h-5 mr-3" />
               )}
-              {isCheckingPermissions ? 'Checking...' : 'Start Scanning'}
+              <span className="font-semibold">
+                {isCheckingPermissions ? 'Checking...' : 'Start Scanning'}
+              </span>
             </Button>
           ) : (
-            <Button onClick={stopScanning} variant="destructive" className="flex-1">
-              <CameraOff className="w-4 h-4 mr-2" />
-              Stop Scanning
+            <Button
+              onClick={stopScanning}
+              variant="destructive"
+              className="flex-1 shadow-lg hover:shadow-xl transition-all duration-300"
+              size="large"
+            >
+              <CameraOff className="w-5 h-5 mr-3" />
+              <span className="font-semibold">Stop Scanning</span>
             </Button>
           )}
         </div>
